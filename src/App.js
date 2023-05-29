@@ -1,39 +1,95 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { Route, Routes, useNavigate } from "react-router-dom";
+import ProtectedPage from "./components/ProtectedPage/ProtectedPage";
+import PublicPage from "./components/PublicPage/PublicPage";
+import ProtectedRoute from "./components/ProtectedRoute/ProtectedRoute";
+import * as onz from "onz-auth";
+
+// Initialisation
+const auth = new onz.Auth({
+  clientID: "YOUR CLIENT ID ABOVE", //Replace with your client id
+  containerID: "myLoginDiv", // Optional, defaults to 'container'
+  isIframe: false, // Optional, defaults to 'false'
+});
+
 function App() {
-  const [modalIsOpen, setModal] = useState(false);
-
-  const modalHandler = () => {
-    return modalIsOpen ? setModal(false) : setModal(true);
+  const [user, setUser] = useState(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(auth.isAuthenticated());
+  const navigate = useNavigate();
+  const handleLogin = () => {
+    setIsLoggingIn(true);
+    auth.showLogin();
   };
+  const handleLogout = () => auth.logout();
+  const handleCancelLogin = () => auth.close();
 
-  const modal = () => {
-    return modalIsOpen ? (
-      <div className="fullWidth fullScreen modal">
-        <div className="centerFlex fullScreen">
-          <div className="bottomShadow flexchild padder">
-            <div className="modal-head">
-                <span className="close right" onClick={modalHandler}>close</span>
-            </div>
-            <div className="modal-body">
-              <h3>I am a modal!</h3>
-            </div>
-          </div>
-        </div>
-      </div>
-    ) : (
-      ""
-    );
-  };
+  useEffect(() => {
+    if (isLoggedIn) {
+      updateUserTokens();
+      navigate("/protected");
+    }
+  }, [isLoggedIn, navigate]);
+
+  function updateUserTokens() {
+    const accessToken = auth.getAccessToken();
+    const accessTokenJwt = auth.getDecodedAccessToken();
+    const idTokenJwt = auth.getDecodedIDToken();
+    setUser({
+      accessToken: accessToken,
+      accessTokenJwt: accessTokenJwt,
+      idTokenJwt: idTokenJwt,
+    });
+  }
+
+  auth.on("closed", () => {
+    setIsLoggingIn(false);
+  });
+
+  auth.on("authenticated", (result) => {
+    setIsLoggedIn(true);
+    updateUserTokens();
+  });
+
+  auth.on("logged_out", () => {
+    setIsLoggedIn(false);
+    setUser(null);
+  });
+
+  auth.on("error", (error) => {
+    alert(error);
+  });
+
   return (
-    <div className="relative">
-      <div className="margAuto">
-        <h1>CodingDrips React Tutorial</h1>
-        <h3>Modal</h3>
-        <button onClick={modalHandler} className="btnct btnct-bluey">
-          Click me!
-        </button>
-      </div>
-      {modal()}
+    <div className="wrapper">
+      <h1>Application</h1>
+      <button
+        onClick={() => {
+          if (isLoggingIn) {
+            handleCancelLogin();
+            return;
+          }
+          if (isLoggedIn) {
+            handleLogout();
+          } else {
+            handleLogin();
+          }
+        }}
+      >
+        {isLoggingIn ? "Cancel Log in" : isLoggedIn ? "Log out" : "Log in"}
+      </button>
+      <div id="myLoginDiv"></div>
+      <Routes>
+        <Route
+          path="/protected"
+          element={
+            <ProtectedRoute user={user}>
+              <ProtectedPage user={user} />
+            </ProtectedRoute>
+          }
+        />
+        <Route index element={<PublicPage />} />
+      </Routes>
     </div>
   );
 }
